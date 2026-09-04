@@ -1,22 +1,14 @@
-print("====================")
-print("Welcome here")
-print("My first post")
-print("====================")
+userName = input("Enter Username: ")
+age = int(input("Enter Age: "))
+category = input("Enter Content Category: ")
 
-userName = "User Name Test"
-bio = "Test Bio"
-followers = 100
-
+print("\nInstagram Profile")
+print("====================")
 print("Username: ", userName)
-print("Bio: ", bio)
-print("Followers: ", followers)
+print("Age: ", age)
+print("Category: ", category)
 
-followers += 50
-print("Day 1:", followers)
+if age>40 and category == "Fun":
+    print("You are old what is fun for you?")
 
-followers += 50
-print("Day 2:", followers)
-
-followers += 50
-print("Day 3:", followers)
 
