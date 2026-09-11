@@ -11,7 +11,7 @@ while True:
                 failedEntries += 1
                 print("Negative numbers are not allowed. Please enter a positive number")
           else:
-                print("Characters are not allowed. Please enter a number")
+                print("Characters and spaces are not allowed. Please enter a number")
                 failedEntries += 1
     
     if userInput.isdigit():
