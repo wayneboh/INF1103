@@ -6,6 +6,7 @@ def loadInventory():
     inventoryFileName = "inventory.txt"
 
     if not os.path.exists(inventoryFileName):
+        print("There is no inventory.txt, creating a new file")
         return 0, []
 
     try:
@@ -15,15 +16,15 @@ def loadInventory():
         if not entries: 
             return 0, []
 
-        inventoryTotal = int(entries[0])
+        inventoryTotal = int(entries[0].split(":")[-1].strip())
 
-        history = [int(line) for line in entries[1:]]
+        history = [int(line.split(":")[-1].strip()) for line in entries[1:]]
 
         print(f"Existing Invetory: {inventoryTotal} units with {len(history)} entries")
         return inventoryTotal, history
 
     except(ValueError, IOError):
-        print("Warning: There is no inventory.txt, creating a new file")
+        print("There is no inventory.txt, creating a new file")
         return 0, []
 
 
