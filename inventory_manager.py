@@ -11,7 +11,7 @@ def saveInventory(inventory):
 
 def loadInventory():
     if not os.path.exists(inventoryFileName):
-        print("No inventory.json found, starting a new inventory.")
+        print("No inventory.json found, creating a new file.")
         inventory = {}
         saveInventory(inventory)
         return inventory
@@ -23,7 +23,7 @@ def loadInventory():
         print("Inventory loaded successfully.")
         return inventory
     except (ValueError, IOError):
-        print("Could not read inventory.json, starting with an empty inventory.")
+        print("Could not read inventory.json, creating a new file.")
         return {}
 
 def getNonEmptyInput(prompt):
