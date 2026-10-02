@@ -1,3 +1,5 @@
+from inventory_manager import loadInventory
+
 userName = input("Enter Username: ")
 age = int(input("Enter Age: "))
 category = input("Enter Content Category: ")
@@ -10,5 +12,4 @@ print("Category: ", category)
 
 if age>40 and category == "Fun":
     print("You are old what is fun for you?")
-
-
+input = loadInventory
