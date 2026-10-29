@@ -1,32 +1,49 @@
 import json
 import os
 
-inventoryFileName = "inventory.json"
+from inventory import Inventory
+from product import Product
+
+INVENTORY_FILE_NAME = "inventory.json"
 
 
-def saveInventory(inventory):
-    with open(inventoryFileName, "w") as file:
-        json.dump(inventory, file, indent=4)
+def save_inventory(inventory):
+    data = {
+        product.product_id: {
+            "name": product.name,
+            "price": product.price,
+            "stock": product.stock,
+        }
+        for product in inventory.get_all_products()
+    }
+    with open(INVENTORY_FILE_NAME, "w") as file:
+        json.dump(data, file, indent=4)
 
 
-def loadInventory():
-    if not os.path.exists(inventoryFileName):
+def load_inventory():
+    inventory = Inventory()
+
+    if not os.path.exists(INVENTORY_FILE_NAME):
         print("No inventory.json found, creating a new file.")
-        inventory = {}
-        saveInventory(inventory)
+        save_inventory(inventory)
         return inventory
 
     print("inventory.json found.")
     try:
-        with open(inventoryFileName, "r") as file:
-            inventory = json.load(file)
+        with open(INVENTORY_FILE_NAME, "r") as file:
+            data = json.load(file)
+        for product_id, item in data.items():
+            inventory.add_product(
+                Product(product_id, item["name"], item["price"], item["stock"])
+            )
         print("Inventory loaded successfully.")
-        return inventory
-    except (ValueError, IOError):
-        print("Could not read inventory.json, creating a new file.")
-        return {}
+    except (ValueError, IOError, KeyError, TypeError, AttributeError):
+        print("Could not read inventory.json, starting with an empty inventory.")
+        return Inventory()
+    return inventory
 
-def getNonEmptyInput(prompt):
+
+def get_non_empty_input(prompt):
     while True:
         value = input(prompt).strip()
         if value:
@@ -34,84 +51,66 @@ def getNonEmptyInput(prompt):
         print("This field cannot be empty. Please try again.")
 
 
-def getValidNumber(prompt, wholeOnly=False):
+def get_valid_number(prompt, whole_only=False):
     while True:
-        userInput = input(prompt).strip()
+        user_input = input(prompt).strip()
 
-        if userInput.startswith("-"):
+        if user_input.startswith("-"):
             print("Negative numbers are not allowed. Please enter a positive number")
             continue
 
         try:
-            return int(userInput) if wholeOnly else float(userInput)
+            return int(user_input) if whole_only else float(user_input)
         except ValueError:
-            kind = "a whole number" if wholeOnly else "a number"
+            kind = "a whole number" if whole_only else "a number"
             print(f"Characters and spaces are not allowed. Please enter {kind}")
 
-def formatProduct(productId, item):
-    return (f"ID: {productId} | Name: {item['name']} | "
-            f"Price: ${item['price']:.2f} | Stock: {item['stock']}")
-
-
-def displayProducts(inventory):
-    print("Current Inventory")
-    print("------------------------------------------------")
-    if not inventory:
-        print("No products in inventory.")
-    for productId, item in inventory.items():
-        print(formatProduct(productId, item))
-    print("------------------------------------------------")
-
-
-def addProduct(inventory):
+def add_product(inventory):
     print("Add New Product")
     while True:
-        productId = getNonEmptyInput("Product ID: ").upper()
-        if productId in inventory:
+        product_id = get_non_empty_input("Product ID: ").upper()
+        if inventory.has_product(product_id):
             print("That Product ID already exists. Please use a different ID.")
         else:
             break
 
-    name = getNonEmptyInput("Product Name: ")
-    price = getValidNumber("Price: ")
-    stock = getValidNumber("Stock Quantity: ", wholeOnly=True)
+    name = get_non_empty_input("Product Name: ")
+    price = get_valid_number("Price: ")
+    stock = get_valid_number("Stock Quantity: ", whole_only=True)
 
-    inventory[productId] = {"name": name, "price": price, "stock": stock}
+    inventory.add_product(Product(product_id, name, price, stock))
     print("Product added successfully!")
 
 
-def updateStock(inventory):
+def update_stock(inventory):
     print("Update Stock")
-    productId = getNonEmptyInput("Product ID: ").upper()
-    if productId not in inventory:
+    product_id = get_non_empty_input("Product ID: ").upper()
+    product = inventory.get_product(product_id)
+    if product is None:
         print("Product not found.")
         return False
 
-    item = inventory[productId]
-    print(f"Current stock for {item['name']}: {item['stock']}")
-    item["stock"] = getValidNumber("New Stock Quantity: ", wholeOnly=True)
+    print(f"Current stock for {product.name}: {product.stock}")
+    product.update_stock(get_valid_number("New Stock Quantity: ", whole_only=True))
     print("Stock updated successfully!")
     return True
 
 
-def searchProduct(inventory):
+def search_product(inventory):
     print("Search Product")
-    term = getNonEmptyInput("Enter Product ID or Name: ").lower()
-    matches = [
-        (productId, item) for productId, item in inventory.items()
-        if term in productId.lower() or term in item["name"].lower()
-    ]
+    term = get_non_empty_input("Enter Product ID or Name: ")
+    matches = inventory.search_product(term)
 
     print("------------------------------------------------")
     if matches:
-        for productId, item in matches:
-            print(formatProduct(productId, item))
+        for product in matches:
+            product.display_information()
     else:
         print("No matching products found.")
     print("------------------------------------------------")
 
 
-def printMenu():
+def print_menu():
     print("----------- MENU -----------")
     print("1. Display All Products")
     print("2. Add Product")
@@ -121,42 +120,44 @@ def printMenu():
     print("6. Exit")
     print("----------------------------")
 
+
+# ---------------------- Main program ----------------------
 def main():
     print("=" * 40)
     print("INVENTORY MANAGEMENT SYSTEM")
     print("=" * 40)
 
-    inventory = loadInventory()
-    unsavedChanges = False
+    inventory = load_inventory()
+    unsaved_changes = False
 
     while True:
-        printMenu()
+        print_menu()
         choice = input("Enter option: ").strip()
 
         if choice == "1":
-            displayProducts(inventory)
+            inventory.display_all()
 
         elif choice == "2":
-            addProduct(inventory)
-            unsavedChanges = True
+            add_product(inventory)
+            unsaved_changes = True
 
         elif choice == "3":
-            if updateStock(inventory):
-                unsavedChanges = True
+            if update_stock(inventory):
+                unsaved_changes = True
 
         elif choice == "4":
-            searchProduct(inventory)
+            search_product(inventory)
 
         elif choice == "5":
-            saveInventory(inventory)
-            unsavedChanges = False
+            save_inventory(inventory)
+            unsaved_changes = False
             print("Inventory saved to inventory.json")
 
         elif choice == "6":
-            if unsavedChanges:
+            if unsaved_changes:
                 answer = input("You have unsaved changes. Save before exiting? (y/n): ").strip().lower()
                 if answer == "y":
-                    saveInventory(inventory)
+                    save_inventory(inventory)
                     print("Inventory has been saved to inventory.json")
             print("Thank you for using Inventory Management System")
             break
@@ -165,4 +166,5 @@ def main():
             print("Invalid option. Please enter a number from 1 to 6.")
 
 
-main()
+if __name__ == "__main__":
+    main()
