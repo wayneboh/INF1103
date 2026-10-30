@@ -120,8 +120,6 @@ def print_menu():
     print("6. Exit")
     print("----------------------------")
 
-
-# ---------------------- Main program ----------------------
 def main():
     print("=" * 40)
     print("INVENTORY MANAGEMENT SYSTEM")

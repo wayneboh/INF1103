@@ -1,5 +1,4 @@
 class Product:
-    """Represents and manages a single product (SRP)."""
 
     def __init__(self, product_id, name, price, stock):
         self.__product_id = product_id
@@ -7,7 +6,6 @@ class Product:
         self.__price = price
         self.__stock = stock
 
-    # Read-only access to the private attributes
     @property
     def product_id(self):
         return self.__product_id
@@ -25,7 +23,6 @@ class Product:
         return self.__stock
 
     def update_stock(self, quantity):
-        """The Product decides how a new stock value is accepted."""
         if quantity < 0:
             raise ValueError("Stock cannot be negative.")
         self.__stock = quantity
