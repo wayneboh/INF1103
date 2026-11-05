@@ -2,18 +2,20 @@ import json
 import os
 
 from inventory import Inventory
-from product import Product
+from physical_product import PhysicalProduct
+from digital_product import DigitalProduct
 
 INVENTORY_FILE_NAME = "inventory.json"
+
+PRODUCT_TYPES = {
+    PhysicalProduct.TYPE: PhysicalProduct,
+    DigitalProduct.TYPE: DigitalProduct,
+}
 
 
 def save_inventory(inventory):
     data = {
-        product.product_id: {
-            "name": product.name,
-            "price": product.price,
-            "stock": product.stock,
-        }
+        product.product_id: product.to_dict()
         for product in inventory.get_all_products()
     }
     with open(INVENTORY_FILE_NAME, "w") as file:
@@ -33,9 +35,11 @@ def load_inventory():
         with open(INVENTORY_FILE_NAME, "r") as file:
             data = json.load(file)
         for product_id, item in data.items():
-            inventory.add_product(
-                Product(product_id, item["name"], item["price"], item["stock"])
-            )
+            product_class = PRODUCT_TYPES.get(item.get("type"))
+            if product_class is None:
+                print(f"Skipping {product_id}: missing or unknown product type.")
+                continue
+            inventory.add_product(product_class.from_dict(product_id, item))
         print("Inventory loaded successfully.")
     except (ValueError, IOError, KeyError, TypeError, AttributeError):
         print("Could not read inventory.json, starting with an empty inventory.")
@@ -65,6 +69,16 @@ def get_valid_number(prompt, whole_only=False):
             kind = "a whole number" if whole_only else "a number"
             print(f"Characters and spaces are not allowed. Please enter {kind}")
 
+def get_product_type():
+    while True:
+        choice = input("Product type (1 = Physical, 2 = Digital): ").strip()
+        if choice == "1":
+            return "physical"
+        if choice == "2":
+            return "digital"
+        print("Invalid choice. Please enter 1 or 2.")
+
+
 def add_product(inventory):
     print("Add New Product")
     while True:
@@ -74,11 +88,19 @@ def add_product(inventory):
         else:
             break
 
+    product_type = get_product_type()
     name = get_non_empty_input("Product Name: ")
     price = get_valid_number("Price: ")
     stock = get_valid_number("Stock Quantity: ", whole_only=True)
 
-    inventory.add_product(Product(product_id, name, price, stock))
+    if product_type == "physical":
+        weight = get_valid_number("Weight (kg): ")
+        product = PhysicalProduct(product_id, name, price, stock, weight)
+    else:
+        download_size = get_valid_number("Download Size (MB): ")
+        product = DigitalProduct(product_id, name, price, stock, download_size)
+
+    inventory.add_product(product)
     print("Product added successfully!")
 
 
@@ -119,6 +141,7 @@ def print_menu():
     print("5. Save Inventory")
     print("6. Exit")
     print("----------------------------")
+
 
 def main():
     print("=" * 40)

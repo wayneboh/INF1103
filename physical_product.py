@@ -5,8 +5,8 @@ from can_be_shipped import CanBeShipped
 class PhysicalProduct(Product, CanBeShipped):
 
     TYPE = "physical"
-    BASE_SHIPPING_COST = 10.00
-    COST_PER_KG = 5.00
+    BASE_SHIPPING_COST = 5.00
+    COST_PER_KG = 2.00
 
     def __init__(self, product_id, name, price, stock, weight):
         super().__init__(product_id, name, price, stock)
