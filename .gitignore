@@ -9,3 +9,4 @@ venv/
 # IDE settings
 .vscode/
 .idea/
+*.pyc
