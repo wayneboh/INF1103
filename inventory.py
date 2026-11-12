@@ -1,7 +1,7 @@
 class Inventory:
 
     def __init__(self):
-        self.__products = {}  # product_id -> Product
+        self.__products = {}
 
     def add_product(self, product):
         if product.product_id in self.__products:
