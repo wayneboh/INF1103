@@ -1,18 +1,25 @@
+import csv
 import json
 import os
 
-from digital_product import DigitalProduct
+from bulk_discount import BulkDiscount
+from discount_strategy import DiscountStrategy
 from inventory import Inventory
+from no_discount import NoDiscount
 from order import Order
-from physical_product import PhysicalProduct
-from product import Product
+from percentage_discount import PercentageDiscount
+from product_factory import ProductFactory
+from student_discount import StudentDiscount
 from supplier import Supplier
 
 INVENTORY_FILE_NAME = "inventory.json"
+DEFAULT_PRODUCTS_FILE = "products.csv"
 
-PRODUCT_TYPES: dict[str, type[PhysicalProduct] | type[DigitalProduct]] = {
-    PhysicalProduct.TYPE: PhysicalProduct,
-    DigitalProduct.TYPE: DigitalProduct,
+DISCOUNT_OPTIONS: dict[str, tuple[str, DiscountStrategy]] = {
+    "1": ("No discount", NoDiscount()),
+    "2": ("10% off", PercentageDiscount(10)),
+    "3": ("20 off orders of 200 or more", BulkDiscount(200, 20)),
+    "4": ("Student discount (5% off)", StudentDiscount()),
 }
 
 
@@ -54,17 +61,52 @@ def load_inventory() -> tuple[Inventory, dict[str, Supplier]]:
             suppliers[supplier_id] = Supplier.from_dict(supplier_id, item)
 
         for product_id, item in data.get("products", {}).items():
-            product_class = PRODUCT_TYPES.get(item.get("type"))
             supplier = suppliers.get(item.get("supplier_id"))
-            if product_class is None or supplier is None:
-                print(f"Skipping {product_id}: unknown product type or supplier.")
+            if supplier is None:
+                print(f"Skipping {product_id}: unknown supplier.")
                 continue
-            inventory.add_product(product_class.from_dict(product_id, item, supplier))
+            try:
+                product = ProductFactory.create_from_dict(product_id, item, supplier)
+            except ValueError as error:
+                print(f"Skipping {product_id}: {error}")
+                continue
+            inventory.add_product(product)
         print("Inventory loaded successfully.")
-    except (ValueError, IOError, KeyError, TypeError, AttributeError):
+    except (json.JSONDecodeError, OSError, KeyError, TypeError, AttributeError):
         print("Could not read inventory.json, starting with an empty inventory.")
         return Inventory(), {}
     return inventory, suppliers
+
+
+def load_products(path: str, inventory: Inventory, supplier: Supplier) -> None:
+    try:
+        file = open(path, newline="")
+    except FileNotFoundError:
+        print(f"Products file not found: {path}")
+    else:
+        loaded = 0
+        with file:
+            reader = csv.reader(file)
+            next(reader, None)
+            for row in reader:
+                if not row:
+                    continue
+                try:
+                    product_type, product_id, name, price, stock = row
+                    product = ProductFactory.create(
+                        product_type.strip(), product_id.strip().upper(),
+                        name.strip(), float(price), int(stock), supplier)
+                except ValueError as error:
+                    print(f"Skipping row {reader.line_num}: {error}")
+                    continue
+                if inventory.add_product(product):
+                    loaded += 1
+                else:
+                    print(f"Skipping row {reader.line_num}: "
+                          f"product ID {product.product_id} already exists.")
+        print(f"{loaded} products loaded.")
+    finally:
+        print("Load attempt finished.")
 
 
 def get_non_empty_input(prompt: str) -> str:
@@ -90,13 +132,25 @@ def get_valid_number(prompt: str, whole_only: bool = False) -> int | float:
             print(f"Characters and spaces are not allowed. Please enter {kind}")
 
 
+def get_positive_float(prompt: str) -> float:
+    while True:
+        try:
+            value = float(input(prompt))
+            if value <= 0:
+                print("Please enter a number greater than zero.")
+                continue
+            return value
+        except ValueError:
+            print("Please enter a valid number, e.g. 12.50")
+
+
 def get_product_type() -> str:
     while True:
         choice = input("Product type (1 = Physical, 2 = Digital): ").strip()
         if choice == "1":
-            return PhysicalProduct.TYPE
+            return ProductFactory.PHYSICAL
         if choice == "2":
-            return DigitalProduct.TYPE
+            return ProductFactory.DIGITAL
         print("Invalid choice. Please enter 1 or 2.")
 
 
@@ -116,7 +170,18 @@ def get_supplier(suppliers: dict[str, Supplier]) -> Supplier:
     return supplier
 
 
-def add_product(inventory: Inventory, suppliers: dict[str, Supplier]) -> None:
+def choose_discount() -> DiscountStrategy:
+    print("Discount options:")
+    for key, (label, _) in DISCOUNT_OPTIONS.items():
+        print(f"{key}. {label}")
+    while True:
+        choice = input("Choose a discount: ").strip()
+        if choice in DISCOUNT_OPTIONS:
+            return DISCOUNT_OPTIONS[choice][1]
+        print(f"Invalid choice. Please enter a number from 1 to {len(DISCOUNT_OPTIONS)}.")
+
+
+def add_product(inventory: Inventory, suppliers: dict[str, Supplier]) -> bool:
     print("Add New Product")
     while True:
         product_id = get_non_empty_input("Product ID: ").upper()
@@ -127,21 +192,26 @@ def add_product(inventory: Inventory, suppliers: dict[str, Supplier]) -> None:
 
     product_type = get_product_type()
     name = get_non_empty_input("Product Name: ")
-    price = get_valid_number("Price: ")
+    price = get_positive_float("Price: ")
     stock = get_valid_number("Stock Quantity: ", whole_only=True)
 
-    product: Product
-    if product_type == PhysicalProduct.TYPE:
-        weight = get_valid_number("Weight (kg): ")
-        supplier = get_supplier(suppliers)
-        product = PhysicalProduct(product_id, name, price, stock, supplier, weight)
+    if product_type == ProductFactory.PHYSICAL:
+        extra_value = get_valid_number("Weight (kg): ")
     else:
-        download_size = get_valid_number("Download Size (MB): ")
-        supplier = get_supplier(suppliers)
-        product = DigitalProduct(product_id, name, price, stock, supplier, download_size)
+        extra_value = get_valid_number("Download Size (MB): ")
+
+    supplier = get_supplier(suppliers)
+
+    try:
+        product = ProductFactory.create(product_type, product_id, name, price,
+                                        stock, supplier, extra_value)
+    except ValueError as error:
+        print(f"Could not add product: {error}")
+        return False
 
     inventory.add_product(product)
     print("Product added successfully!")
+    return True
 
 
 def update_stock(inventory: Inventory) -> bool:
@@ -153,7 +223,11 @@ def update_stock(inventory: Inventory) -> bool:
         return False
 
     print(f"Current stock for {product.name}: {product.stock}")
-    product.update_stock(get_valid_number("New Stock Quantity: ", whole_only=True))
+    try:
+        product.update_stock(get_valid_number("New Stock Quantity: ", whole_only=True))
+    except ValueError as error:
+        print(f"Could not update stock: {error}")
+        return False
     print("Stock updated successfully!")
     return True
 
@@ -174,7 +248,7 @@ def search_product(inventory: Inventory) -> None:
 
 def create_order(inventory: Inventory) -> None:
     print("Create Order")
-    order = Order(get_non_empty_input("Order ID: ").upper())
+    order = Order(get_non_empty_input("Order ID: ").upper(), choose_discount())
 
     while True:
         product_id = input("Product ID to add (press Enter to finish): ").strip().upper()
@@ -187,14 +261,26 @@ def create_order(inventory: Inventory) -> None:
             continue
 
         quantity = get_valid_number("Quantity: ", whole_only=True)
-        if quantity == 0:
-            print("Quantity must be at least 1.")
+        try:
+            order.add_order_line(product, quantity)
+        except ValueError as error:
+            print(f"Could not add item: {error}")
             continue
-
-        order.add_order_line(product, quantity)
         print("Item added to order.")
 
     order.display_information()
+
+
+def import_products(inventory: Inventory, suppliers: dict[str, Supplier]) -> bool:
+    print("Import Products from CSV")
+    path = input(f"CSV file path (press Enter for {DEFAULT_PRODUCTS_FILE}): ").strip()
+    if not path:
+        path = DEFAULT_PRODUCTS_FILE
+
+    supplier = get_supplier(suppliers)
+    count_before = len(inventory.products)
+    load_products(path, inventory, supplier)
+    return len(inventory.products) > count_before
 
 
 def print_menu() -> None:
@@ -205,7 +291,8 @@ def print_menu() -> None:
     print("4. Search Product")
     print("5. Save Inventory")
     print("6. Create Order")
-    print("7. Exit")
+    print("7. Import Products from CSV")
+    print("8. Exit")
     print("----------------------------")
 
 
@@ -225,8 +312,8 @@ def main() -> None:
             inventory.display_all_products()
 
         elif choice == "2":
-            add_product(inventory, suppliers)
-            unsaved_changes = True
+            if add_product(inventory, suppliers):
+                unsaved_changes = True
 
         elif choice == "3":
             if update_stock(inventory):
@@ -244,6 +331,10 @@ def main() -> None:
             create_order(inventory)
 
         elif choice == "7":
+            if import_products(inventory, suppliers):
+                unsaved_changes = True
+
+        elif choice == "8":
             if unsaved_changes:
                 answer = input("You have unsaved changes. Save before exiting? (y/n): ").strip().lower()
                 if answer == "y":
@@ -253,7 +344,7 @@ def main() -> None:
             break
 
         else:
-            print("Invalid option. Please enter a number from 1 to 7.")
+            print("Invalid option. Please enter a number from 1 to 8.")
 
 
 if __name__ == "__main__":

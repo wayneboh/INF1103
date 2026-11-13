@@ -9,6 +9,9 @@ class Product(ABC):
 
     def __init__(self, product_id: str, name: str, price: float,
                  stock: int, supplier: Supplier) -> None:
+        if price <= 0:
+            raise ValueError("Price must be greater than zero.")
+        self.__validate_stock(stock)
         self.__product_id: str = product_id
         self.__name: str = name
         self.__price: float = price
@@ -35,9 +38,13 @@ class Product(ABC):
     def supplier(self) -> Supplier:
         return self.__supplier
 
-    def update_stock(self, quantity: int) -> None:
+    @staticmethod
+    def __validate_stock(quantity: int) -> None:
         if quantity < 0:
             raise ValueError("Stock cannot be negative.")
+
+    def update_stock(self, quantity: int) -> None:
+        self.__validate_stock(quantity)
         self.__stock = quantity
 
     def display_information(self) -> None:
